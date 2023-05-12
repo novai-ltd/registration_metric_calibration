@@ -31,6 +31,20 @@ from datetime import datetime
 from PyQt5.QtCore import QSettings
 import time
 
+class QLabelWithLeaveEvent(QLabel):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+
+        # Set up the label
+
+        # ...
+
+    def leaveEvent(self, event):
+        # This method is called whenever the mouse pointer leaves the label
+        self.main_window.mouse_left_target_image()
+
+
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -53,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.difference_image = QLabel(self)
         self.difference_image.setPixmap(self.grey)
         self.difference_image.setFixedHeight(self.image_size[0])
-        self.target_image = QLabel(self)
+        self.target_image = QLabelWithLeaveEvent(self, self)
         self.target_image.setPixmap(self.grey)
         self.target_image.setFixedHeight(self.image_size[0])
         self.registered_image = QLabel(self)
@@ -179,7 +193,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Set up event handlers
         self.target_image.mouseMoveEvent = self.mouse_move_event
- #       self.target_image.leaveEvent()
+        #self.target_image.leaveEvent()
 
 
 
@@ -212,6 +226,16 @@ class MainWindow(QtWidgets.QMainWindow):
             i = i + 1
         self.registration_selection_menu.activated[str].connect(self.select_registration)
         radiobutton.toggled.connect(self.imageOnClicked)
+
+    # when mouse leaves target image, repaint registered image to remove crosshair
+    def mouse_left_target_image(self):
+
+        # reload image
+        self.registered_image.setPixmap(self.convert_ndarray_to_QPixmap(self.registered_image_array))
+        self.registered_image.repaint()
+
+        print("Mouse left the label")
+
 
 
     def select_registration(self, registration_str):
