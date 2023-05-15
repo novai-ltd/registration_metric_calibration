@@ -36,23 +36,20 @@ class QLabelWithLeaveEvent(QLabel):
         super().__init__(parent)
         self.main_window = main_window
 
-        # Set up the label
-
-        # ...
-
     def leaveEvent(self, event):
         # This method is called whenever the mouse pointer leaves the label
+        # call method of main window which refreshes registered image
         self.main_window.mouse_left_target_image()
 
 
-
 class MainWindow(QtWidgets.QMainWindow):
+
 
     def __init__(self):
         super().__init__()
 
         # set data directory and get list of eyes
-        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\hi_res\\NIR\\TV_registered_to_first_visit_sitk_corr\\"
+        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\hi_res\\NIRAF\\TV_registered_to_first_visit_sitk_corr\\"
         self.image_size = (450, 450)
 
         # initialise image display to grey
@@ -86,11 +83,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.target_radiobutton = QRadioButton("target image")
         self.target_radiobutton.setChecked(True)
         self.target_radiobutton.image = "target"
-        self.target_radiobutton.toggled.connect(self.imageOnClicked)
+        self.target_radiobutton.toggled.connect(self.toggle_images)
         self.toggle_image_layout.addWidget(self.target_radiobutton, 0, 0)
         self.registered_radiobutton = QRadioButton("registered image")
         self.registered_radiobutton.image = "registered"
-        self.registered_radiobutton.toggled.connect(self.imageOnClicked)
+        self.registered_radiobutton.toggled.connect(self.toggle_images)
         self.toggle_image_layout.addWidget(self.registered_radiobutton, 0, 1)
 
         # set up metrics table
@@ -127,38 +124,45 @@ class MainWindow(QtWidgets.QMainWindow):
         # radion buttons arranged horizontally
         self.select_grading_buttons_layout = QHBoxLayout()
         radiobutton = QRadioButton("1")
-        radiobutton.setChecked(True)
         radiobutton.grading = 1
-#        radiobutton.toggled.connect(self.onClicked)
+        radiobutton.toggled.connect(self.select_grading)
         self.select_grading_buttons_layout.addWidget(radiobutton)
         radiobutton = QRadioButton("2")
         radiobutton.grading = 2
-#       radiobutton.toggled.connect(self.onClicked)
+        radiobutton.toggled.connect(self.select_grading)
         self.select_grading_buttons_layout.addWidget(radiobutton)
         radiobutton = QRadioButton("3")
         radiobutton.grading = 3
-#        radiobutton.toggled.connect(self.onClicked)
+        radiobutton.toggled.connect(self.select_grading)
         self.select_grading_buttons_layout.addWidget(radiobutton)
         radiobutton = QRadioButton("4")
         radiobutton.grading = 4
-#        radiobutton.toggled.connect(self.onClicked)
+        radiobutton.toggled.connect(self.select_grading)
         self.select_grading_buttons_layout.addWidget(radiobutton)
         radiobutton = QRadioButton("5")
         radiobutton.grading = 5
-#        radiobutton.toggled.connect(self.onClicked)
+        radiobutton.toggled.connect(self.select_grading)
         self.select_grading_buttons_layout.addWidget(radiobutton)
 
-        # button to save grading
-        self.save_grading_button = QPushButton(self)
-        self.save_grading_button.setText('save grading')
-        #self.save_grading_button.clicked.connect(self.save_grading)
+        # button to store current grading
+        self.store_grading_button = QPushButton(self)
+        self.store_grading_button.setText('store grading')
+        self.store_grading_button.clicked.connect(self.store_grading)
+
+        # button to save all metrics and gradings to file
+        # initialise as disabled
+        self.save_gradings_to_file_button = QPushButton(self)
+        self.save_gradings_to_file_button.setText('save gradings and metrics to file')
+        self.save_gradings_to_file_button.clicked.connect(self.save_gradings_to_file)
+        self.save_gradings_to_file_button.setDisabled(True)
 
         # overall grading layout
-        # label, then radio buttons, then save button
+        # label, then radio buttons, then store and save buttons
         self.grading_layout = QVBoxLayout()
         self.grading_layout.addWidget(self.set_grading_label)
         self.grading_layout.addLayout(self.select_grading_buttons_layout)
-        self.grading_layout.addWidget(self.save_grading_button)
+        self.grading_layout.addWidget(self.store_grading_button)
+        self.grading_layout.addWidget(self.save_gradings_to_file_button)
 
         # overall registration selection layout
         # label then dropdown
@@ -191,11 +195,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.widget.setLayout(self.layout)
         self.setCentralWidget(self.widget)
 
-        # Set up event handlers
+        # switch on mouse tracking for target image
         self.target_image.mouseMoveEvent = self.mouse_move_event
-        #self.target_image.leaveEvent()
-
-
 
         # get list of registrations
         image_files = glob.glob(os.path.join(self.data_dir, "*.tif"))
@@ -217,31 +218,51 @@ class MainWindow(QtWidgets.QMainWindow):
         self.registrations = pd.DataFrame({'target filename': target_filenames, 'registered filename': registered_filenames})
 
         # populate registration selection dropdown
+        # also initialize dicts to hold metrics and gradings
         # connect to select_registration function
+        self.NMI_dict = {}
+        self.NCC_dict = {}
+        self.MSE_dict = {}
+        self.grading_dict = {}
         i = 1
         for row in self.registrations.iterrows():
             alignment_txt = str(i) + ': ' + row[1][1] + ' to ' + row[1][0]
 
+            # add entry to metrics and gradings dicts
+            self.NMI_dict.update({i - 1: None})
+            self.NCC_dict.update({i - 1: None})
+            self.MSE_dict.update({i - 1: None})
+            self.grading_dict.update({i - 1: None})
+
+            # automatically load first image pair on startup
+            if i == 1 :
+
+                self.first_registration_txt = alignment_txt
+
             self.registration_selection_menu.addItem(alignment_txt)
+
+
+
             i = i + 1
+
+        # load the first image pair
+        self.select_registration(self.first_registration_txt)
+
+        # connect the registration selection menu to functiion loading image pairs
         self.registration_selection_menu.activated[str].connect(self.select_registration)
-        radiobutton.toggled.connect(self.imageOnClicked)
 
-    # when mouse leaves target image, repaint registered image to remove crosshair
-    def mouse_left_target_image(self):
+        # put headings in metrics table
+        self.metrics_table.setItem(0, 0, QTableWidgetItem("NMI"))
+        self.metrics_table.setItem(0, 1, QTableWidgetItem("NCC"))
+        self.metrics_table.setItem(0, 2, QTableWidgetItem("MSE"))
 
-        # reload image
-        self.registered_image.setPixmap(self.convert_ndarray_to_QPixmap(self.registered_image_array))
-        self.registered_image.repaint()
-
-        print("Mouse left the label")
-
-
+        self.current_grading = None
 
     def select_registration(self, registration_str):
 
         # set current registration files
         registration_ind = int(registration_str.split(':')[0]) - 1
+        self.registration_ind = registration_ind
         self.target_file_name = self.registrations['target filename'].iloc[registration_ind]
         self.registered_file_name = self.registrations['registered filename'].iloc[registration_ind]
         self.target_file_path = os.path.join(self.data_dir, self.target_file_name)
@@ -266,10 +287,33 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # calculate similarity metrics
         NMI, NCC, MSE = calculate_metrics(target_image, registered_image)
-        print(NMI, NCC, MSE)
+        self.NMI = NMI
+        self.NCC = NCC
+        self.MSE = MSE
+
+        # update dict
+        self.NMI_dict.update({registration_ind:NMI})
+        self.NCC_dict.update({registration_ind:NCC})
+        self.MSE_dict.update({registration_ind:MSE})
+
+        #  update values in metrics table
+        self.metrics_table.setItem(1, 0, QTableWidgetItem(f'{NMI:4.3f}'))
+        self.metrics_table.setItem(1, 1, QTableWidgetItem(f'{-1*NCC:4.3f}'))
+        self.metrics_table.setItem(1, 2, QTableWidgetItem(f'{MSE:4.3f}'))
+
+        # reset current grading
+        # has to be done here as select_grading is somehow called earlier in this function - how??
+        self.current_grading = None
+
+    # when mouse leaves target image, repaint registered image to remove crosshair
+    def mouse_left_target_image(self):
+
+        # reload image
+        self.registered_image.setPixmap(self.convert_ndarray_to_QPixmap(self.registered_image_array))
+        self.registered_image.repaint()
 
     # define behaviour for toggling between registered and target images
-    def imageOnClicked(self):
+    def toggle_images(self):
         radioButton = self.sender()
         if radioButton.isChecked():
             selected_image = radioButton.image
@@ -297,11 +341,28 @@ class MainWindow(QtWidgets.QMainWindow):
         # End painting
         painter.end()
 
+    # when a grading radio button is selected, store the grading
+    def select_grading(self):
+
+        # save the grading associated with the radio button for the current image pair
+        grading_radio_button = self.sender()
+        self.current_grading = grading_radio_button.grading
 
 
+    # store the current grading for the current
+    def store_grading(self) :
 
+        self.grading_dict.update({self.registration_ind: self.current_grading})
 
+        # when a grading is set for all image pairs, enable saving
+        grading_vals = self.grading_dict.values()
+        if None in grading_vals :
 
+            self.save_gradings_to_file_button.setDisabled(True)
+
+        else :
+
+            self.save_gradings_to_file_button.setDisabled(False)
 
     def mouse_move_event(self, event):
         # Update the crosshair position when the mouse is moved over the left-hand image
@@ -310,9 +371,9 @@ class MainWindow(QtWidgets.QMainWindow):
        #     self.crosshair_position = QPoint(event.pos().x() * self.registered_image.width() / self.target_image.width(),
        #                                      event.pos().y() * self.registered_image.height() / self.target_image.height())
         #self.repaint()
-        print(event.pos())
-        if not self.target_image.underMouse():
-            print('off!')
+        #print(event.pos())
+        #if not self.target_image.underMouse():
+        #    print('off!')
         self.draw_crosshair_on_registered_image(event.pos())
 
     # see https://stackoverflow.com/questions/34232632/convert-python-opencv-image-numpy-array-to-pyqt-qpixmap-image
@@ -328,12 +389,21 @@ class MainWindow(QtWidgets.QMainWindow):
         return qpixmap
 
     def closeEvent(self, event):
-        buttonReply = QMessageBox.question(self, 'Save points', "Save points",
-                                           QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if buttonReply == QMessageBox.Yes:
-           self.savePoints()
+        reply = QMessageBox.question(self, 'Quit', 'Are you sure you want to quit?',
+        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            event.accept()
         else:
-            print('No clicked.')
+            event.ignore()
+
+    def save_gradings_to_file(self):
+
+        # convert gradings and metrics to dataframe
+        # save dataframe to csv
+        metrics_gradings_DF = pd.DataFrame([self.NMI_dict, self.NCC_dict, self.MSE_dict, self.grading_dict])
+        metrics_gradings_DF = metrics_gradings_DF.transpose()
+        metrics_gradings_DF.columns=['NMI', 'NCC', 'MSE', 'grading']
+        metrics_gradings_DF.to_csv(os.path.join(self.data_dir, 'metrics_gradings.csv'))
 
 sys._excepthook = sys.excepthook
 def exception_hook(exctype, value, traceback):
