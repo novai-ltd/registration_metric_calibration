@@ -220,6 +220,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # populate registration selection dropdown
         # also initialize dicts to hold metrics and gradings
         # connect to select_registration function
+        self.metrics_target_filenames_dict = {}
+        self.metrics_registered_filenames_dict = {}
         self.NMI_dict = {}
         self.NCC_dict = {}
         self.MSE_dict = {}
@@ -229,6 +231,9 @@ class MainWindow(QtWidgets.QMainWindow):
             alignment_txt = str(i) + ': ' + row[1][1] + ' to ' + row[1][0]
 
             # add entry to metrics and gradings dicts
+            # also store target and registered filenames
+            self.metrics_target_filenames_dict.update({i - 1:None})
+            self.metrics_registered_filenames_dict.update({i - 1: None})
             self.NMI_dict.update({i - 1: None})
             self.NCC_dict.update({i - 1: None})
             self.MSE_dict.update({i - 1: None})
@@ -271,6 +276,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # set images
         target_image = tifffile.imread(self.target_file_path)
         registered_image = tifffile.imread(self.registered_file_path)
+
+        # pad images
+        padded_target_image = np.zeros((2000, 2000))
+        padded_registered_image = np.zeros((2000, 2000))
+        border_width = int((2000 - 1536) / 2)
+        padded_target_image[border_width:border_width + 1536, border_width:border_width + 1536] = target_image
+        padded_registered_image[border_width:border_width + 1536, border_width:border_width + 1536] = registered_image
+        target_image = padded_target_image
+        registered_image = padded_registered_image
+
+
+
         target_image_RGB = gray2rgb(target_image)
         registered_image_RGB = gray2rgb(registered_image)
         self.target_image_array = (target_image_RGB * 255).astype(np.uint8)
@@ -286,12 +303,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.toggle_image.setPixmap(self.convert_ndarray_to_QPixmap(self.target_image_array))
 
         # calculate similarity metrics
+        #(re)-invert NCC
         NMI, NCC, MSE = calculate_metrics(target_image, registered_image)
+        NCC = -1 * NCC
         self.NMI = NMI
         self.NCC = NCC
         self.MSE = MSE
 
-        # update dict
+        # update dicts
+        self.metrics_target_filenames_dict.update({registration_ind:self.target_file_name})
+        self.metrics_registered_filenames_dict.update({registration_ind:self.registered_file_name})
         self.NMI_dict.update({registration_ind:NMI})
         self.NCC_dict.update({registration_ind:NCC})
         self.MSE_dict.update({registration_ind:MSE})
@@ -400,9 +421,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # convert gradings and metrics to dataframe
         # save dataframe to csv
-        metrics_gradings_DF = pd.DataFrame([self.NMI_dict, self.NCC_dict, self.MSE_dict, self.grading_dict])
+        metrics_gradings_DF = pd.DataFrame([self.metrics_target_filenames_dict, self.metrics_registered_filenames_dict, self.NMI_dict, self.NCC_dict, self.MSE_dict, self.grading_dict])
         metrics_gradings_DF = metrics_gradings_DF.transpose()
-        metrics_gradings_DF.columns=['NMI', 'NCC', 'MSE', 'grading']
+        metrics_gradings_DF.columns=['target image file', 'registered image file', 'NMI', 'NCC', 'MSE', 'grading']
         metrics_gradings_DF.to_csv(os.path.join(self.data_dir, 'metrics_gradings.csv'))
 
 sys._excepthook = sys.excepthook
