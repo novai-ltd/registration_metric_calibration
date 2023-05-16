@@ -12,6 +12,7 @@ import glob
 import pandas as pd
 import tifffile
 from skimage.color import gray2rgb
+from skimage import exposure
 from utils import calculate_metrics
 import json
 # import scipy.interpolate as interpolate
@@ -49,7 +50,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         # set data directory and get list of eyes
-        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\hi_res\\NIRAF\\TV_registered_to_first_visit_sitk_corr\\"
+        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\lo_res\\NIRAF\\TV_registered_to_first_visit_sitk_corr"
         self.image_size = (450, 450)
 
         # initialise image display to grey
@@ -122,6 +123,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # set up layout for grading registrations on a scale of 1 to 5
         # radion buttons arranged horizontally
+        # include -1 reject button
         self.select_grading_buttons_layout = QHBoxLayout()
         radiobutton = QRadioButton("1")
         radiobutton.grading = 1
@@ -143,6 +145,10 @@ class MainWindow(QtWidgets.QMainWindow):
         radiobutton.grading = 5
         radiobutton.toggled.connect(self.select_grading)
         self.select_grading_buttons_layout.addWidget(radiobutton)
+        radiobutton = QRadioButton("-1")
+        radiobutton.grading = -1
+        radiobutton.toggled.connect(self.select_grading)
+        self.select_grading_buttons_layout.addWidget(radiobutton)
 
         # button to store current grading
         self.store_grading_button = QPushButton(self)
@@ -156,13 +162,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.save_gradings_to_file_button.clicked.connect(self.save_gradings_to_file)
         self.save_gradings_to_file_button.setDisabled(True)
 
+        # button to show ungraded registrations
+        self.show_ungraded_button = QPushButton(self)
+        self.show_ungraded_button.setText('show ungraded registrations')
+        self.show_ungraded_button.clicked.connect(self.show_ungraded)
+
         # overall grading layout
-        # label, then radio buttons, then store and save buttons
+        # label, then radio buttons, then store, save and show ungraded buttons
         self.grading_layout = QVBoxLayout()
         self.grading_layout.addWidget(self.set_grading_label)
         self.grading_layout.addLayout(self.select_grading_buttons_layout)
         self.grading_layout.addWidget(self.store_grading_button)
         self.grading_layout.addWidget(self.save_gradings_to_file_button)
+        self.grading_layout.addWidget(self.show_ungraded_button)
 
         # overall registration selection layout
         # label then dropdown
@@ -277,14 +289,20 @@ class MainWindow(QtWidgets.QMainWindow):
         target_image = tifffile.imread(self.target_file_path)
         registered_image = tifffile.imread(self.registered_file_path)
 
+        # do contrast stretching to enable visualization of image features
+        p2, p98 = np.percentile(target_image[100:-100, 100:-100], (2, 98))
+        target_image = exposure.rescale_intensity(target_image, in_range=(p2, p98))
+        p2, p98 = np.percentile(registered_image[100:-100, 100:-100], (2, 98))
+        registered_image = exposure.rescale_intensity(registered_image, in_range=(p2, p98))
+
         # pad images
-        padded_target_image = np.zeros((2000, 2000))
-        padded_registered_image = np.zeros((2000, 2000))
-        border_width = int((2000 - 1536) / 2)
-        padded_target_image[border_width:border_width + 1536, border_width:border_width + 1536] = target_image
-        padded_registered_image[border_width:border_width + 1536, border_width:border_width + 1536] = registered_image
-        target_image = padded_target_image
-        registered_image = padded_registered_image
+        #padded_target_image = np.zeros((2000, 2000))
+        #padded_registered_image = np.zeros((2000, 2000))
+        #border_width = int((2000 - 1536) / 2)
+        #padded_target_image[border_width:border_width + 1536, border_width:border_width + 1536] = target_image
+        #padded_registered_image[border_width:border_width + 1536, border_width:border_width + 1536] = registered_image
+        #target_image = padded_target_image
+        #registered_image = padded_registered_image
 
 
 
@@ -416,6 +434,17 @@ class MainWindow(QtWidgets.QMainWindow):
             event.accept()
         else:
             event.ignore()
+
+    def show_ungraded(self):
+
+        # find ungraded registrations
+        ungraded_registrations = [key + 1 for key, value in self.grading_dict.items() if value is None]
+
+        # list them in popup
+        msg = QMessageBox()
+        msg.setWindowTitle("Ungraded registrations")
+        msg.setText("Ungraded registrations are as follows:" + str(ungraded_registrations))
+        msg.exec_()
 
     def save_gradings_to_file(self):
 
