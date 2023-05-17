@@ -50,7 +50,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         # set data directory and get list of eyes
-        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\lo_res\\NIRAF\\TV_registered_to_first_visit_sitk_corr"
+        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\batch\\exhaustive\\to_earliest_visit\\images\\lo_res\\optimized"
         self.image_size = (450, 450)
 
         # initialise image display to grey
@@ -215,6 +215,10 @@ class MainWindow(QtWidgets.QMainWindow):
         image_files = pd.DataFrame({'image file': image_files})
         image_files['file name'] = image_files['image file'].apply(lambda x: os.path.basename(x))
         image_files['eyedentifier'] = image_files['file name'].apply(lambda x: '_'.join(x.split('_')[:4]))
+
+        # remove any file names that are vessel alignment images
+        image_files = image_files[~image_files['file name'].str.contains('vessel_alignment')]
+
         grouped = image_files.groupby('eyedentifier')
         target_filenames = []
         registered_filenames = []
@@ -238,18 +242,37 @@ class MainWindow(QtWidgets.QMainWindow):
         self.NCC_dict = {}
         self.MSE_dict = {}
         self.grading_dict = {}
+        self.aligment_txt_dict = {}
         i = 1
         for row in self.registrations.iterrows():
             alignment_txt = str(i) + ': ' + row[1][1] + ' to ' + row[1][0]
 
-            # add entry to metrics and gradings dicts
-            # also store target and registered filenames
-            self.metrics_target_filenames_dict.update({i - 1:None})
-            self.metrics_registered_filenames_dict.update({i - 1: None})
-            self.NMI_dict.update({i - 1: None})
-            self.NCC_dict.update({i - 1: None})
-            self.MSE_dict.update({i - 1: None})
-            self.grading_dict.update({i - 1: None})
+            # check if this registration has already been graded
+            alignment_json_filename = f'registration_{str(i-1)}_metrics_gradings.json'
+            if os.path.exists(os.path.join(self.data_dir, alignment_json_filename)):
+
+                # read in json file and populate dicts from it
+                with open(os.path.join(self.data_dir, alignment_json_filename), 'r') as f:
+                    alignment_json = json.load(f)
+                f.close()
+                self.metrics_target_filenames_dict.update({i - 1:alignment_json['target filename']})
+                self.metrics_registered_filenames_dict.update({i - 1: alignment_json['registered filename']})
+                self.NMI_dict.update({i - 1: alignment_json['NMI']})
+                self.NCC_dict.update({i - 1: alignment_json['NCC']})
+                self.MSE_dict.update({i - 1: alignment_json['MSE']})
+                self.grading_dict.update({i - 1: alignment_json['grading']})
+
+            else :
+
+                # add entry to metrics and gradings dicts
+                # also store target and registered filenames
+                self.metrics_target_filenames_dict.update({i - 1:None})
+                self.metrics_registered_filenames_dict.update({i - 1: None})
+                self.NMI_dict.update({i - 1: None})
+                self.NCC_dict.update({i - 1: None})
+                self.MSE_dict.update({i - 1: None})
+                self.grading_dict.update({i - 1: None})
+            self.aligment_txt_dict.update({i - 1: alignment_txt})
 
             # automatically load first image pair on startup
             if i == 1 :
@@ -392,6 +415,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def store_grading(self) :
 
         self.grading_dict.update({self.registration_ind: self.current_grading})
+
+        # save the metrics and gradings for this registration to a json file
+        registration_metrics_gradings_dict = {'target filename': self.target_file_name,
+                                              'registered filename': self.registered_file_name,
+                                              'NMI': self.NMI,
+                                              'NCC': self.NCC,
+                                              'MSE': self.MSE,
+                                              'grading': self.current_grading}
+        registration_metrics_gradings_json = json.dumps(registration_metrics_gradings_dict)
+        alignment_json_filename = f'registration_{str(self.registration_ind)}_metrics_gradings.json'
+        with open(self.data_dir + '\\' + alignment_json_filename, 'a') as f:
+            f.write(registration_metrics_gradings_json + '\n')
+        f.close()
 
         # when a grading is set for all image pairs, enable saving
         grading_vals = self.grading_dict.values()
