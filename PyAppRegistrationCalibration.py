@@ -250,7 +250,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # check if this registration has already been graded
             alignment_json_filename = f'registration_{str(i-1)}_metrics_gradings.json'
             if os.path.exists(os.path.join(self.data_dir, alignment_json_filename)):
-
+                print(alignment_json_filename)
                 # read in json file and populate dicts from it
                 with open(os.path.join(self.data_dir, alignment_json_filename), 'r') as f:
                     alignment_json = json.load(f)
@@ -311,6 +311,20 @@ class MainWindow(QtWidgets.QMainWindow):
         # set images
         target_image = tifffile.imread(self.target_file_path)
         registered_image = tifffile.imread(self.registered_file_path)
+
+        # strip any padding from images to maximise useful image area
+        if target_image.shape[0] == 2000:
+            border_width = 232
+            target_image = target_image[border_width:border_width + 1536, border_width:border_width + 1536]
+        elif target_image.shape[0] == 1000 :
+            border_width = 116
+            target_image = target_image[border_width:border_width + 768, border_width:border_width + 768]
+        if registered_image.shape[0] == 2000:
+            border_width = 232
+            registered_image = registered_image[border_width:border_width + 1536, border_width:border_width + 1536]
+        elif registered_image.shape[0] == 1000:
+            border_width = 116
+            registered_image = registered_image[border_width:border_width + 768, border_width:border_width + 768]
 
         # do contrast stretching to enable visualization of image features
         p2, p98 = np.percentile(target_image[100:-100, 100:-100], (2, 98))
@@ -425,7 +439,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                               'grading': self.current_grading}
         registration_metrics_gradings_json = json.dumps(registration_metrics_gradings_dict)
         alignment_json_filename = f'registration_{str(self.registration_ind)}_metrics_gradings.json'
-        with open(self.data_dir + '\\' + alignment_json_filename, 'a') as f:
+        with open(self.data_dir + '\\' + alignment_json_filename, 'w') as f:
             f.write(registration_metrics_gradings_json + '\n')
         f.close()
 
