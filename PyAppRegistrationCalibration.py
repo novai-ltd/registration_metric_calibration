@@ -50,7 +50,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         # set data directory and get list of eyes
-        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\batch\\exhaustive\\to_earliest_visit\\images\\lo_res\\optimized"
+        self.data_dir =  "C:\\Users\\Johnathan Young\\Box\\AIDEV\\03. Internal AI Projects\\4. Improved registration\\data\\lo_res\\NIRAF\\bilateral_registered_to_first_visit_exhaustive"
         self.image_size = (450, 450)
 
         # initialise image display to grey
@@ -263,6 +263,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.grading_dict.update({i - 1: alignment_json['grading']})
 
             else :
+
 
                 # add entry to metrics and gradings dicts
                 # also store target and registered filenames
